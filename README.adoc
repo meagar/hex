@@ -7,15 +7,15 @@ Where before, you might have a mock that looked like this...
 
 [source,go]
 ----
-func TestUserClient(t*testing.T) {
+func TestUserClient(t *testing.T) {
 	called := false
-	server := httptest.NewServer(httptest.HandlerFunc(func(rw http.ResponseWriter, req*http.Request) {
-		called := true
-		if req.URL.Path() != "/users" {
+	server := httptest.NewServer(httptest.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		called = true
+		if req.URL.Path != "/users" {
 			t.Errorf("Expected AllUsers to call /users but no call was made")
 		}
 
-		io.WriteString(`{"id": 123, "name": "test_user"}`)
+		io.WriteString(rw, `{"id": 123, "name": "test_user"}`)
 	}))
 
 	users := UserClient{Url: server.URL}
