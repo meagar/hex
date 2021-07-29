@@ -100,7 +100,6 @@ func (e *Expectation) pass() bool {
 }
 
 // Matches returns true if the expectation is fulfilled by the given http.Request
-// TODO: Support header, body, etc.
 func (e *Expectation) matchAgainst(req *http.Request) bool {
 	// Baseline check against method and path
 	if req.Method != e.method || req.URL.Path != e.path {

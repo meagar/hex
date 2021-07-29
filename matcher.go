@@ -126,7 +126,6 @@ func matchingParamsBySingle(key interface{}, values url.Values) bool {
 			matchMap[buildMatcher(key)] = buildMatcher(value)
 		}
 	} else if m, ok := key.(valueMatcher); ok {
-		// TODO: Does this work?
 		matchMap[m] = Any
 	} else {
 		log.Panicf("Unable to interpret argument %v as a type of matcher", key)
