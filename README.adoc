@@ -42,7 +42,9 @@ func TestUserClient(t*testing.T) {
 
 == Getting Started
 
-Hex  provides a higher level `Server` which embeds `http.Server`. Create one with `hex.NewServer`, and start making expectations:
+Hex  provides a higher level `Server` which embeds `http.Server`. Create one with `hex.NewServer`, and start making expectations.
+The arguments to `hex.NewServer` are a `*testing.T`, and an optional `http.Handler` which may be `nil`.
+If an existing `http.Handler` is passed to `NewServer`, hex will pass requests to it *after* checking them against its tree of expectations.
 
 [source,go]
 ----
@@ -104,7 +106,6 @@ http.Get(server.URL + "/users?foo=bar") // pass
 http.Get(server.URL + "/users?foo=bar") // pass
 ----
 
-
 == Matching strings and regular expressions
 
 Any key or value given to `ExpectReq`, `WithQuery`, `WithHeader` or `WithBody` can one of:
@@ -136,6 +137,31 @@ server.ExpectReq("GET", "/search").WithQuery(hex.P{
 	"q": "test",
 	"page": hex.R(`^\d+$`),
 })
+----
+
+== Mocking Responses
+
+By default, hex will pass requests to the `http.Handler` object you provide through `NewServer` (if any).
+You can override the response with `RespondWith(status int, body string)`, `ResponseWidthFn(func(http.ResponseWriter, *http.Request))` or `RespondWithHandler(http.Handler)`:
+
+[source,go]
+----
+server := hex.NewServer(t, nil)
+server.ExpectReq("GET", "/users").RespondWith("200", "OK")
+----
+
+By default, the `http.Handler` you provide to `NewServer` will not be invoked if a requests matches an expectation for which a mock response has been defined.
+However, you can allow the request to "fall through" and reach your own handler with `AndCallThrough`.
+Note that, if your handler writes a response, it will be concatenated to the mock response already produced, and any HTTP status you attempt to write will be silently discarded  if a mock response has already set one.:
+
+[source,go]
+----
+server := hex.NewServer(t, http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+	fmt.Fprintf("BBB")
+}))
+
+// Requests matching this expectation will receive a response of "AAABBB"
+server.ExpectReq("GET", "/foo").RespondWith(200, "AAA").AndCallThrough()
 ----
 
 == Scoping with `Do`
