@@ -203,7 +203,8 @@ func TestCaching(t*testing.T) {
 		server := hex.NewServer(t, nil)
 		server.ExpectReq("GET", "/users").Never()
 		// ...
-		_, err := client.GetUser("foo") // invalid user ID, assume the client 
+		// Assume the client is not supposed to make requests unless the ID is an integer
+		_, err := client.GetUser("foo")
 		// assert that err is not nil
 	})
 })
