@@ -40,6 +40,35 @@ func TestUserClient(t*testing.T) {
 }
 ----
 
+hex will automatically report failures, and let you know which HTTP requests were made that didn't match any expectations:
+
+[source,go]
+----
+func TestExample(t *testing.T) {
+	s := hex.NewServer(t, nil)
+
+	s.ExpectReq("GET", "/foo")
+
+	http.Get(s.URL + "/bar")
+}
+----
+
+Output:
+
+[source,plain]
+----
+$ go test ./example
+--- FAIL: TestExample (0.00s)
+    server.go:29: One or more HTTP expectations failed
+    print.go:205: Expectations
+    print.go:205: 	GET /foo - failed, no matching requests
+    print.go:205: Unmatched Requests
+    print.go:205: 	GET /bar
+FAIL
+FAIL	github.com/meagar/hex/example	0.260s
+FAIL
+----
+
 == Getting Started
 
 Hex  provides a higher level `Server` which embeds `http.Server`. Create one with `hex.NewServer`, and start making expectations.
