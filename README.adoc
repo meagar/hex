@@ -1,44 +1,67 @@
-== HEx - Http EXpectations
+= HEx - Http EXpectations
 :toc:
 
-HEx is a simple wrapper that extends `httptest.Server` with an expectation syntax, allowing you to create mock APIs using a simple and expressive DSL.
-
-Where before, you might have a mock that looked like this...
-
-[source,go]
-----
-func TestUserClient(t *testing.T) {
-	called := false
-	server := httptest.NewServer(httptest.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		called = true
-		if req.URL.Path != "/users" {
-			t.Errorf("Expected AllUsers to call /users but no call was made")
-		}
-
-		io.WriteString(rw, `{"id": 123, "name": "test_user"}`)
-	}))
-
-	users := UserClient{Url: server.URL}
-	users.AllUsers()
-
-	if called != true {
-		t.Error("The users service was not called")
-	}
-}
-----
-
-Instead, you can write the equivalent test with expectations:
+HEx is a simple wrapper that extends `httptest.Server` with an expectation syntax, allowing you to create mock APIs using a simple and expressive DSL:
 
 [source, go]
 ----
 func TestUserClient(t*testing.T) {
-	server := hex.NewServer(t, nil)	
-	server.ExpectReq("GET", "/users").RespondWith(200, `{"id": 123, "name": "test_user"}`)
-	users := UserClient{Url: server.URL}
-	users.AllUsers()
-	// hex will automatically report failures when the test's cleanup method is called.
+	// A mock of some remote user service
+	server := hex.NewServer(t, nil)	 // nil, or optional http.Handler
+
+	server.ExpectReq("GET", "/users").
+		WithHeader("Authorization", "Bearer xxyyzz")
+		WithQuery("search", "foo").
+		RespondWith(200, `{"id": 123, "name": "test_user"}`)
+
+	// Actual client implementation would go here
+	http.Get(server.URL + "/foo")
+
+	// Output:
+	// example_test.go:12: One or more HTTP expectations failed
+	// example_test.go:12: Expectations
+	// example_test.go:12: 	GET /users with header matching Authorization="Bearer xyz"query string matching search="foo" - failed, no matching requests
+	// example_test.go:12: Unmatched Requests
+	// example_test.go:12: 	GET /foo
 }
 ----
+
+== Getting Started
+
+Hex  provides a higher level `Server` which embeds `http.Server`. Create one with `hex.NewServer`, and start making expectations.
+The arguments to `hex.NewServer` are a `*testing.T`, and an optional `http.Handler` which may be `nil`.
+If an existing `http.Handler` is passed to `NewServer`, hex will pass requests to it *after* checking them against its tree of expectations.
+
+[source,go]
+----
+s := hex.NewServer(t, http.HandlerFunc(rw ResponseWriter, req *http.Request) {
+	fmt.Fprintf(tw, "Ok")
+})
+
+s.ExpectReq("GET", "/users").WithQuery("page", "1")
+
+http.Get(s.URL + "/users?page=1") // Match
+----
+
+If you have an existing mock, it can embed an `hex.Expecter`, which provides `ExpectReq` for setting up expectations, and `LogReq` for logging incoming requests so they can be matched against expectations. https://github.com/meagar/hex/blob/main/server.go([`Server`] does exactly this, and serves an an example of how to write up the necessary plumbing.
+
+== Matching Requests
+
+Expectations are setup via `ExpectReq`, which accepts an HTTP method (one of `"GET"`, `"POST"`, `"PATCH"`, etc) and a path (not including query string):
+
+[source,go]
+----
+server.ExpectReq("GET", "/path/to/resource")
+----
+
+`ExpectReq` accepts one or two `interface{}` values, where each value is one of the following:
+* A string, ie `"GET"` or `"/path/to/resource`
+* A regular expression created via `regexp.MustCompile` or the convenience method `hex.R`
+* A built-in matcher like `hex.Any` or `hex.None`
+* A function of type `hex.MatchFn` (`func(req*http.Request) bool`)
+* A `map[interface{}]interface{}` which can recursively contain any of the above (typically only useful for matching against header/body/query string)
+
+== Reporting Failure
 
 hex will automatically report failures, and let you know which HTTP requests were made that didn't match any expectations:
 
@@ -69,24 +92,38 @@ FAIL	github.com/meagar/hex/example	0.260s
 FAIL
 ----
 
-== Getting Started
+=== Matching against strings, regular expressions, functions and more
 
-Hex  provides a higher level `Server` which embeds `http.Server`. Create one with `hex.NewServer`, and start making expectations.
-The arguments to `hex.NewServer` are a `*testing.T`, and an optional `http.Handler` which may be `nil`.
-If an existing `http.Handler` is passed to `NewServer`, hex will pass requests to it *after* checking them against its tree of expectations.
+Any key or value given to `ExpectReq`, `WithQuery`, `WithHeader` or `WithBody` can one of:
 
+* A string, in which case case-sensitive exact matching is used:
++
+[source,go]
+server.ExpectReq("GET", "/users") // matches GET /users?foo=bar
+
+* A regular expression (via `regexp.MustCompile` or `hex.R`):
++
+[source,go]
+server.ExpectReq(hex.R("^(POST|PATCH)$", hex.R("^users/\d+$")
+
+* One of several predefined constants like `hex.Any` or `hex.None`
++
 [source,go]
 ----
-s := hex.NewServer(t, http.HandlerFunc(rw ResponseWriter, req *http.Request) {
-	fmt.Fprintf(tw, "Ok")
-})
-
-s.ExpectReq("GET", "/users").WithQuery("page", "1")
-
-http.Get(s.URL + "/users?page=1") // Match
+server.ExpectReq("GET", hex.Any)                             // matches any GET request
+server.ExpectReq(hex.Any, hex.Any)                           // matches *any* request
+server.ExpectReq(hex.Any, hex.Any).WithQuery(hex.Any, "123") // Matches any request with any query string parameter having the value "123"
 ----
 
-If you have an existing mock, it can embed an `hex.Expecter`, which provides `ExpectReq` for setting up expectations, and `LogReq` for logging incoming requests so they can be matched against expectations. https://github.com/meagar/hex/blob/main/server.go([`Server`] does exactly this, and serves an an example of how to write up the necessary plumbing.
+* A map of `interface{}`/`interface{}` pairs, where each `interface{}` value is itself a string/regex/map/
++
+[source,go]
+----
+server.ExpectReq("GET", "/search").WithQuery(hex.P{
+	"q": "test",
+	"page": hex.R(`^\d+$`),
+})
+----
 
 == Matching against the query string, header and body
 
@@ -135,38 +172,6 @@ http.Get(server.URL + "/users?foo=bar") // pass
 http.Get(server.URL + "/users?foo=bar") // pass
 ----
 
-== Matching strings and regular expressions
-
-Any key or value given to `ExpectReq`, `WithQuery`, `WithHeader` or `WithBody` can one of:
-
-* A string, in which case case-sensitive exact matching is used:
-+
-[source,go]
-server.ExpectReq("GET", "/users") // matches GET /users?foo=bar
-
-* A regular expression (via `regexp.MustCompile` or `hex.R`):
-+
-[source,go]
-server.ExpectReq(hex.R("^(POST|PATCH)$", hex.R("^users/\d+$")
-
-* One of several predefined constants like `hex.Any` or `hex.None`
-+
-[source,go]
-----
-server.ExpectReq("GET", hex.Any)                             // matches any GET request
-server.ExpectReq(hex.Any, hex.Any)                           // matches *any* request
-server.ExpectReq(hex.Any, hex.Any).WithQuery(hex.Any, "123") // Matches any request with any query string parameter having the value "123"
-----
-
-* A map of `interface{}`/`interface{}` pairs, where each `interface{}` value is itself a string/regex/map/
-+
-[source,go]
-----
-server.ExpectReq("GET", "/search").WithQuery(hex.P{
-	"q": "test",
-	"page": hex.R(`^\d+$`),
-})
-----
 
 == Mocking Responses
 
@@ -255,3 +260,12 @@ server.ExpectReq("POST", "/users").WithBody(hex.P{
 	"age": hex.R(`^\d+$`),
 })
 ----
+
+
+== TODO
+
+- [ ] Better support for matching JSON requests
+- [ ] Higher level helpers
+	- [ ] `WithBearer`
+	- [ ] `WithJsonResponse`
+	- [ ] `WithType("json"|"html")`

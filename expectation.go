@@ -15,8 +15,8 @@ type Expectation struct {
 	parent   *Expectation
 	children []*Expectation
 
-	method string
-	path   string
+	method stringMatcher
+	path   stringMatcher
 
 	quantifier *quantifier
 
@@ -36,7 +36,7 @@ type quantifier struct {
 
 func (e *Expectation) String() string {
 	buf := &strings.Builder{}
-	fmt.Fprintf(buf, "%s %s", e.method, e.path)
+	fmt.Fprintf(buf, "%s %s", e.method.String(), e.path.String())
 	if len(e.matchers) > 0 {
 		fmt.Fprintf(buf, " with ")
 		for _, m := range e.matchers {
@@ -102,7 +102,7 @@ func (e *Expectation) pass() bool {
 // Matches returns true if the expectation is fulfilled by the given http.Request
 func (e *Expectation) matchAgainst(req *http.Request) bool {
 	// Baseline check against method and path
-	if req.Method != e.method || req.URL.Path != e.path {
+	if !e.method.match(req.Method) || !e.path.match(req.URL.Path) {
 		return false
 	}
 

@@ -19,6 +19,21 @@ func ExampleExpectation_WithQuery() {
 	//	GET /search with query string matching q="cats" - passed
 }
 
+func ExampleExpectation_WithQuery_invalidArgument() {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("Panic:", err)
+		}
+	}()
+
+	e := Expecter{}
+	// Unrecognized arguments to WithQuery produce a panic.
+	e.ExpectReq("GET", "/search").WithQuery(123)
+
+	// Output:
+	// Panic: WithQuery: Cannot use value 123 when matching against url.Values
+}
+
 func TestQueryMatcher(t *testing.T) {
 	e := Expecter{}
 	e.ExpectReq("GET", "/foo").WithQuery("name", "bob")

@@ -26,6 +26,7 @@ func NewServer(t TestingT, handler http.Handler) *Server {
 	s.Server = httptest.NewServer(&s)
 	s.URL = s.Server.URL
 	t.Cleanup(func() {
+		t.Helper()
 		s.HexReport(t)
 	})
 
@@ -44,6 +45,7 @@ func NewTLSServer(t TestingT, handler http.Handler) *Server {
 	s.Server = httptest.NewTLSServer(&s)
 	s.URL = s.Server.URL
 	t.Cleanup(func() {
+		t.Helper()
 		s.HexReport(t)
 	})
 

@@ -2,7 +2,7 @@ package hex
 
 import (
 	"fmt"
-	"io"
+	"log"
 	"net/http"
 	"strings"
 	"testing"
@@ -71,15 +71,30 @@ func (e *Expecter) FailedExpectations() (failed []*Expectation) {
 }
 
 // ExpectReq adds an Expectation to the stack
-func (e *Expecter) ExpectReq(method, path string) (exp *Expectation) {
+func (e *Expecter) ExpectReq(method, path interface{}) (exp *Expectation) {
 	if e.root == nil {
-		e.root = &Expectation{method: "ROOT", path: "ROOT"}
+		// Lazily initialize the Expecter, so the zero-value is usable
+		e.root = &Expectation{
+			method: &noStringMatcher{},
+			path:   &noStringMatcher{},
+		}
+
 		e.current = e.root
 	}
 
+	methodMatcher, err := makeStringMatcher(method)
+	if err != nil {
+		log.Panicf("Invalid HTTP method matcher %v in ExpectReq: %s", method, err.Error())
+	}
+
+	pathMatcher, err := makeStringMatcher(path)
+	if err != nil {
+		log.Panicf("Invalid HTTP path matcher %v in ExpectReq: %s", path, err.Error())
+	}
+
 	exp = &Expectation{
-		method:   method,
-		path:     path,
+		method:   methodMatcher,
+		path:     pathMatcher,
 		expecter: e,
 		parent:   e.current,
 	}
@@ -136,26 +151,44 @@ type TestingT interface {
 
 var _ TestingT = &testing.T{}
 
-// Summary returns a summary of all passed/failed expectations and any requests that didn't match
-func (e *Expecter) Summary() string {
-	b := &strings.Builder{}
-	e.writeSummary(b)
-	return b.String()
+type captureT struct {
+	buf strings.Builder
 }
 
-func (e *Expecter) writeSummary(out io.Writer) {
-	fmt.Fprintf(out, "Expectations\n")
+var _ TestingT = &captureT{}
+
+func (t *captureT) Logf(format string, args ...interface{}) {
+	fmt.Fprintf(&t.buf, format, args...)
+}
+
+func (t *captureT) Errorf(format string, args ...interface{}) {
+	fmt.Fprintf(&t.buf, format, args...)
+}
+
+func (t *captureT) Helper()        {}
+func (t *captureT) Cleanup(func()) {}
+
+// Summary returns a summary of all passed/failed expectations and any requests that didn't match
+func (e *Expecter) Summary() string {
+	t := captureT{}
+	e.writeSummary(&t)
+	return t.buf.String()
+}
+
+func (e *Expecter) writeSummary(t TestingT) {
+	t.Helper()
+	t.Logf("Expectations\n")
 	for _, exp := range e.PassedExpectations() {
-		fmt.Fprintf(out, "\t%s\n", exp.String())
+		t.Logf("\t%s\n", exp.String())
 	}
 	for _, exp := range e.FailedExpectations() {
-		fmt.Fprintf(out, "\t%s\n", exp.String())
+		t.Logf("\t%s\n", exp.String())
 	}
 
 	if len(e.UnmatchedRequests()) > 0 {
-		fmt.Fprintf(out, "Unmatched Requests\n")
+		t.Logf("Unmatched Requests\n")
 		for _, req := range e.UnmatchedRequests() {
-			fmt.Fprintf(out, "\t%s %s\n", req.Method, req.URL.Path)
+			t.Logf("\t%s %s\n", req.Method, req.URL.Path)
 		}
 	}
 }
@@ -168,17 +201,5 @@ func (e *Expecter) HexReport(t TestingT) {
 		t.Errorf("One or more HTTP expectations failed\n")
 	}
 
-	e.writeSummary(&errorLogWriter{t})
+	e.writeSummary(t)
 }
-
-type errorLogWriter struct {
-	t TestingT
-}
-
-func (e *errorLogWriter) Write(bytes []byte) (int, error) {
-	e.t.Helper()
-	e.t.Logf(string(bytes))
-	return len(bytes), nil
-}
-
-var _ io.Writer = &errorLogWriter{}

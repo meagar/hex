@@ -1,14 +1,13 @@
 package hex
 
 import (
+	"fmt"
+	"log"
 	"net/url"
 	"testing"
 )
 
-func TestMatcher(t *testing.T) {
-	// empty := url.Values{}
-	// single := url.Values{"name": []string{"bob"}}
-	// multi := url.Values{"name": []string{"bob"}, "age": []string{"45"}, "email": []string{"bob@example.com"}}
+func TestURLValuesMatcher_Match(t *testing.T) {
 
 	type Args []interface{}
 	type Values url.Values
@@ -51,19 +50,34 @@ func TestMatcher(t *testing.T) {
 		{Args{R(`^key\d+$`), R(`^value\d+$`)}, "key12=value34", true}, // Match
 		{Args{R(`^key\d+$`), R(`value\d$`)}, "key=value1foo", false},  // No match, anchor not satisfied
 
+		// matchers using functions
+		// {Args{func(interface{}) bool { return true }}, "foo=bar", true},
+		// {Args{func(interface{}) bool { return false }}, "foo=bar", false},
+
+		// matching against param maps with string/regex keys and values
 		{Args{P{"key1": "value1", "key2": "value2"}}, "key1=value1&key2=value2", true},
+		{Args{P{"key1": R(`^value\d+$`), "key2": R(`^value\d+$`)}}, "key1=value1&key2=value1", true},
+		{Args{P{"key1": R(`^value\d+$`), "key2": R(`^value\d+$`)}}, "key1=value&key2=value", false},
 	}
 
 	for _, tc := range testCases {
-		values, err := url.ParseQuery(tc.encodedParams)
-		if err != nil {
-			panic("Invalid query string:" + tc.encodedParams)
-		}
+		t.Run(fmt.Sprintf("matchArgsAgainstURLValues(%v, %s)", tc.args, tc.encodedParams), func(t *testing.T) {
+			values, err := url.ParseQuery(tc.encodedParams)
+			if err != nil {
+				panic("Invalid query string:" + tc.encodedParams)
+			}
 
-		got := matchArgsAgainstURLValues(tc.args, values)
+			u, err := makeURLValuesMatcher(tc.args)
+			if err != nil {
+				log.Panic("Unexpected error creating urlValuesMatcher:", err)
+			}
+			got := u.matches(values)
 
-		if got != tc.want {
-			t.Errorf("matchArgsAgainstURLValues(%v, %s): Got %v, want %v", tc.args, values, got, tc.want)
-		}
+			if got != tc.want {
+				t.Errorf("matchArgsAgainstURLValues(%v, %s): Got %v, want %v", tc.args, values, got, tc.want)
+				t.FailNow()
+			}
+		})
 	}
+
 }
