@@ -23,8 +23,6 @@ type Expectation struct {
 	matches  []*http.Request
 	matchers []matcher
 
-	debug bool
-
 	handler     http.Handler
 	callThrough bool
 }
@@ -117,15 +115,6 @@ func (e *Expectation) matchAgainst(req *http.Request) bool {
 		e.quantifier.count++
 	}
 
-	if e.debug {
-		fmt.Println("Debug")
-		fmt.Println(req)
-		fmt.Println(req.Header)
-		fmt.Println(req.URL.Query())
-		fmt.Println(req.Form)
-		panic("debug")
-	}
-
 	return true
 }
 
@@ -154,25 +143,3 @@ func (e *Expectation) Once() *Expectation {
 	e.quantify("once", 1, 1)
 	return e
 }
-
-// Debug marks an expectation for debugging. When it matches a request, it will dump details about
-// the request to STDOUT
-func (e *Expectation) Debug() *Expectation {
-	e.debug = true
-	return e
-}
-
-// func (exp *Expectation) AtMost(n uint) *Expectation {
-// 	exp.quantify("at most", 0, n)
-// 	return exp
-// }
-
-// func (exp *Expectation) NTimes(n uint) *Expectation {
-// 	exp.quantify("exactly", n, n)
-// 	return exp
-// }
-
-// func (exp *Expectation) AtLeast(n uint) *Expectation {
-// 	exp.quantify("at least", n, math.MaxUint32)
-// 	return exp
-// }
