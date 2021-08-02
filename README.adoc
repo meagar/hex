@@ -61,7 +61,7 @@ server.ExpectReq("GET", "/path/to/resource")
 * A function of type `hex.MatchFn` (`func(req*http.Request) bool`)
 * A `map[interface{}]interface{}` which can recursively contain any of the above (typically only useful for matching against header/body/query string)
 
-== Reporting Failure
+=== Reporting Failure
 
 hex will automatically report failures, and let you know which HTTP requests were made that didn't match any expectations:
 
