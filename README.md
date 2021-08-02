@@ -1,6 +1,6 @@
-# HEx - Http EXpectations
+# Hex - Http EXpectations
 
-HEx is a simple wrapper that extends `httptest.Server` with an expectation syntax, allowing you to create mock APIs using a simple and expressive DSL:
+Hex is a simple wrapper that extends `httptest.Server` with an expectation syntax, allowing you to create mock APIs using a simple and expressive DSL:
 
 
 ```go
