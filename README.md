@@ -9,7 +9,7 @@ func TestUserClient(t*testing.T) {
 	server := hex.NewServer(t, nil)	 // nil, or optional http.Handler
 
 	server.ExpectReq("GET", "/users").
-		WithHeader("Authorization", "Bearer xxyyzz")
+		WithHeader("Authorization", "Bearer xxyyzz").
 		WithQuery("search", "foo").
 		RespondWith(200, `{"id": 123, "name": "test_user"}`)
 
